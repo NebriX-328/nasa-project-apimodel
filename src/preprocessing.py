@@ -17,6 +17,11 @@ class OutlierLogTransformer(BaseEstimator, TransformerMixin):
         self.epsilon = epsilon
 
     def fit(self, X, y=None):
+        # Convert ndarray to DataFrame
+        if isinstance(X, np.ndarray):
+            # Use all column indices as temporary names
+            X = pd.DataFrame(X, columns=[f"col{i}" for i in range(X.shape[1])])
+        self.columns_ = X.columns
         self.percentiles_ = {
             col: (np.percentile(X[col], self.lower * 100),
                   np.percentile(X[col], self.upper * 100))
@@ -25,14 +30,20 @@ class OutlierLogTransformer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
+        # Convert to DataFrame if ndarray
+        is_array = False
+        if isinstance(X, np.ndarray):
+            is_array = True
+            X = pd.DataFrame(X, columns=self.columns_)
+
         X_trans = X.copy()
         for col in X_trans.columns:
             lower, upper = self.percentiles_[col]
             X_trans[col] = np.clip(X_trans[col], lower, upper)
-            if col in self.log_features:
+            if self.log_features and col in self.log_features:
                 X_trans[col] = np.log1p(np.clip(X_trans[col], self.epsilon, None))
-        return X_trans
 
+        return X_trans.values if is_array else X_trans
 
 # ------------------- Main Preprocessing ------------------- #
 def main():
@@ -42,7 +53,6 @@ def main():
     os.makedirs("models", exist_ok=True)
 
     df = pd.read_csv("data/merged_exoplanet_dataset.csv")
-
 
     features = [
         'koi_period', 'koi_duration', 'koi_depth', 'koi_prad',
@@ -78,7 +88,6 @@ def main():
     print("\n Preprocessing complete.")
     print("→ Saved preprocessed data: data/preprocessed_data.csv")
     print("→ Saved pipeline: models/preprocess_pipeline.pkl")
-
 
 if __name__ == "__main__":
     main()
